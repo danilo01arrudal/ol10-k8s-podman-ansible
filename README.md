@@ -20,6 +20,9 @@ A solução foi projetada para ser:
 - **Altamente Integrada**: Provisionamento dinâmico via pipeline de CI/CD GitHub Actions executado em runners locais auto-hospedados (*self-hosted*).
 - **Segura**: Comunicação baseada em SSH Key pairs de nível administrativo e total conformidade com Cgroupsv2 (Systemd driver).
 
+<img width="1408" height="768" alt="image" src="https://github.com/danilo01arrudal/ol10-k8s-podman-ansible/blob/main/images/0000001.png" />
+
+
 ---
 
 ## 🚀 Principais Funcionalidades
