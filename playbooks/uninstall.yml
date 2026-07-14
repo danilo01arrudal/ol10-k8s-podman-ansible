@@ -1,0 +1,80 @@
+---
+- name: Desinstalação e Limpeza Completa do Cluster Kubernetes Single-Node
+  hosts: k8s_node
+  become: yes
+  tasks:
+    - name: Resetar o estado do kubeadm (se existir)
+      command: kubeadm reset -f
+      failed_when: false
+      ignore_errors: yes
+
+    - name: Parar serviços
+      service:
+        name: "{{ item }}"
+        state: stopped
+        enabled: no
+      failed_when: false
+      ignore_errors: yes
+      loop:
+        - kubelet
+        - crio
+
+    - name: Remover pacotes do Kubernetes, CRI-O e NVIDIA Toolkit
+      dnf:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+          - cri-o
+          - cri-tools
+          - nvidia-container-toolkit
+        state: absent
+        autoremove: yes
+
+    - name: Remover arquivos residuais de configuração
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/kubernetes
+        - /etc/crio
+        - /var/lib/kubelet
+        - /var/lib/crio
+        - /var/run/dbus/subrequest
+        - /etc/sysctl.d/99-kubernetes.conf
+        - /etc/modules-load.d/kubernetes.conf
+        - /etc/cdi
+
+    - name: Descarregar módulos de kernel do Kubernetes
+      modprobe:
+        name: "{{ item }}"
+        state: absent
+      failed_when: false
+      ignore_errors: yes
+      loop:
+        - br_netfilter
+        - overlay
+
+    - name: Restaurar configurações padrão do Sysctl
+      sysctl:
+        name: "{{ item.key }}"
+        state: absent
+      failed_when: false
+      ignore_errors: yes
+      loop:
+        - { key: 'net.bridge.bridge-nf-call-iptables' }
+        - { key: 'net.bridge.bridge-nf-call-ip6tables' }
+        - { key: 'net.ipv4.ip_forward' }
+
+    - name: Limpar tabelas de regras do IPtables
+      command: "{{ item }}"
+      failed_when: false
+      ignore_errors: yes
+      loop:
+        - iptables -F
+        - iptables -X
+        - iptables -t nat -F
+        - iptables -t nat -X
+        - iptables -t mangle -F
+        - iptables -t mangle -X
+        - ip link delete crio0

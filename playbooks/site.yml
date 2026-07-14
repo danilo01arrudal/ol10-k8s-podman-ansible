@@ -1,0 +1,6 @@
+---
+- name: Provisionamento do Nó Único Kubernetes com suporte a GPU NVIDIA (CDI)
+  hosts: k8s_node
+  become: yes
+  roles:
+    - kubernetes-gpu

@@ -1,0 +1,8 @@
+---
+- name: Aplicar sysctl
+  command: sysctl --system
+
+- name: Reiniciar crio
+  service:
+    name: crio
+    state: restarted

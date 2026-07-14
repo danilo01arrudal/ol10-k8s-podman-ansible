@@ -1,0 +1,27 @@
+---
+# Versões estáveis do ecossistema Kubernetes
+kubernetes_version: "1.31"
+kubernetes_package_version: "1.31.0"
+
+# Versões estáveis do Container Runtime (CRI-O)
+crio_version: "1.31"
+crio_package_version: "1.31.0"
+
+# Módulos de Kernel necessários
+kernel_modules:
+  - overlay
+  - br_netfilter
+
+# Parâmetros Sysctl de rede do host para o K8s
+sysctl_settings:
+  net.bridge.bridge-nf-call-iptables: 1
+  net.bridge.bridge-nf-call-ip6tables: 1
+  net.ipv4.ip_forward: 1
+
+# Configuração do repositório Kubernetes para RHEL/Oracle Linux 10
+kubernetes_yum_repo_baseurl: "https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/rpm/"
+kubernetes_yum_repo_gpgkey: "https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/rpm/repodata/repomd.xml.key"
+
+# Configuração do repositório CRI-O
+crio_yum_repo_baseurl: "https://pkgs.k8s.io/addons:/cri-o:/stable:/v{{ crio_version }}/rpm/"
+crio_yum_repo_gpgkey: "https://pkgs.k8s.io/addons:/cri-o:/stable:/v{{ crio_version }}/rpm/repodata/repomd.xml.key"

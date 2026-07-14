@@ -1,0 +1,127 @@
+---
+- name: Garantir que os módulos de kernel do Kubernetes sejam carregados na inicialização
+  copy:
+    dest: /etc/modules-load.d/kubernetes.conf
+    content: |
+      overlay
+      br_netfilter
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Carregar módulos de kernel de forma imediata
+  modprobe:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ kernel_modules }}"
+
+- name: Configurar parâmetros sysctl de rede para Kubernetes
+  copy:
+    dest: /etc/sysctl.d/99-kubernetes.conf
+    content: |
+      net.bridge.bridge-nf-call-iptables  = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+      net.ipv4.ip_forward                 = 1
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Aplicar sysctl
+
+- name: Forçar a aplicação imediata dos parâmetros sysctl
+  meta: flush_handlers
+
+- name: Adicionar repositório oficial do Kubernetes v1.31 (RPMs)
+  yum_repository:
+    name: kubernetes
+    description: Kubernetes Official Repository
+    baseurl: "{{ kubernetes_yum_repo_baseurl }}"
+    enabled: yes
+    gpgcheck: yes
+    repo_gpgcheck: no
+    gpgkey: "{{ kubernetes_yum_repo_gpgkey }}"
+
+- name: Adicionar repositório oficial do CRI-O v1.31 (RPMs)
+  yum_repository:
+    name: crio
+    description: CRI-O Stable Repository
+    baseurl: "{{ crio_yum_repo_baseurl }}"
+    enabled: yes
+    gpgcheck: yes
+    repo_gpgcheck: no
+    gpgkey: "{{ crio_yum_repo_gpgkey }}"
+
+- name: Instalar pacotes de infraestrutura do Kubernetes e Container Runtime (CRI-O)
+  dnf:
+    name:
+      - kubelet-{{ kubernetes_package_version }}
+      - kubeadm-{{ kubernetes_package_version }}
+      - kubectl-{{ kubernetes_package_version }}
+      - cri-o-{{ crio_package_version }}
+      - cri-tools
+    state: present
+    disable_excludes: kubernetes
+
+- name: Configurar CRI-O para usar drivers Systemd para cgroupsv2
+  copy:
+    dest: /etc/crio/crio.conf.d/01-cgroup-manager.conf
+    content: |
+      [crio.runtime]
+      conmon_cgroup = "system.slice"
+      cgroup_manager = "systemd"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reiniciar crio
+
+- name: Habilitar e iniciar serviço do CRI-O
+  service:
+    name: crio
+    state: started
+    enabled: yes
+
+- name: Habilitar serviço do Kubelet para inicialização pós-kubeadm
+  service:
+    name: kubelet
+    enabled: yes
+
+# ==================== SUITE GPU NVIDIA RTX 3060 via CDI (NÓ ÚNICO) ====================
+
+- name: Adicionar Repositório NVIDIA Container Toolkit para RHEL/OL 10
+  get_url:
+    url: https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo
+    dest: /etc/yum.repos.d/nvidia-container-toolkit.repo
+    mode: '0644'
+
+- name: Instalar NVIDIA Container Toolkit
+  dnf:
+    name: nvidia-container-toolkit
+    state: present
+
+- name: Garantir que o diretório de especificação CDI exista
+  file:
+    path: /etc/cdi
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Gerar a especificação CDI para a GPU NVIDIA RTX 3060
+  command: nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+  register: cdi_generation
+  changed_when: true
+  failed_when: cdi_generation.rc != 0
+
+- name: Validar e configurar injeção de runtime CDI no CRI-O do host
+  copy:
+    dest: /etc/crio/crio.conf.d/02-cdi.conf
+    content: |
+      [crio.runtime]
+      enable_cdi_devices = true
+      cdi_spec_dirs = ["/etc/cdi", "/var/run/cdi"]
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reiniciar crio
+
+- name: Forçar reinicialização do runtime após injeção das configurações CDI
+  meta: flush_handlers

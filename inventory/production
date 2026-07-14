@@ -1,0 +1,6 @@
+[k8s_node]
+KUBERSINGLE ansible_host=192.168.0.40
+
+[k8s_node:vars]
+ansible_user=root
+ansible_python_interpreter=/usr/bin/python3

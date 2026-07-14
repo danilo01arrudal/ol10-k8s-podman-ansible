@@ -1,0 +1,22 @@
+name: Deploy Kubernetes Cluster
+
+on:
+  workflow_dispatch:
+    description: "Inicia o provisionamento do cluster Kubernetes v1.31 Single-Node com GPU CDI no Oracle Linux 10.1"
+
+jobs:
+  deploy:
+    name: Execute Ansible Playbook - Install
+    runs-on: self-hosted
+    steps:
+      - name: Checkout Repository Code
+        uses: actions/checkout@v4
+
+      - name: Validate Ansible Environment
+        run: |
+          ansible --version
+          ansible-lint --version || true
+
+      - name: Run Playbook Provisioning
+        run: |
+          ansible-playbook -i inventory/production playbooks/site.yml -v

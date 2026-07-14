@@ -1,0 +1,17 @@
+name: Uninstall Kubernetes Cluster
+
+on:
+  workflow_dispatch:
+    description: "Destrói o cluster Kubernetes Single-Node e remove pacotes, configurações e regras de rede"
+
+jobs:
+  uninstall:
+    name: Execute Ansible Playbook - Uninstall
+    runs-on: self-hosted
+    steps:
+      - name: Checkout Repository Code
+        uses: actions/checkout@v4
+
+      - name: Run Playbook Decommissioning
+        run: |
+          ansible-playbook -i inventory/production playbooks/uninstall.yml -v
