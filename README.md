@@ -1,23 +1,24 @@
-# 🐘 Provisionamento Automatizado do PostgreSQL 18 com Ansible
+# ☸️ Provisionamento Automatizado de um Cluster Kubernetes Multi-Node com Suporte a GPU NVIDIA via CDI no Oracle Linux 10.1
 
-[![GitHub](https://img.shields.io/badge/Repository-danilo01arrudal/ol10--pg18--ansible-blue?logo=github)](https://github.com/danilo01arrudal/ol10-pg18-ansible)
-[![Ansible](https://img.shields.io/badge/Ansible-2.9+-black?logo=ansible)](https://www.ansible.com/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-336791?logo=postgresql)](https://www.postgresql.org/)
-[![Oracle Linux](https://img.shields.io/badge/Oracle%20Linux-10-red?logo=oracle)](https://www.oracle.com/linux/)
+[![GitHub](https://img.shields.io/badge/Repository-danilo01arrudal/ol10--k8s--podman--ansible-blue?logo=github)](https://github.com/danilo01arrudal/ol10-k8s-podman-ansible)
+[![Ansible](https://img.shields.io/badge/Ansible-2.16+-black?logo=ansible)](https://www.ansible.com/)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-1.31-326ce5?logo=kubernetes)](https://kubernetes.io/)
+[![Oracle Linux](https://img.shields.io/badge/Oracle%20Linux-10.1-red?logo=oracle)](https://www.oracle.com/linux/)
 
 ---
 
 ## 📋 Visão Geral
 
-Este projeto tem como objetivo **automatizar o processo de instalação, configuração e gerenciamento do PostgreSQL 18 em ambientes Oracle Linux 10**, utilizando **Ansible** como ferramenta de automação.
+Este projeto tem como objetivo **automatizar o processo de instalação, configuração, orquestração e gerenciamento de um cluster Kubernetes v1.31 multi-node em ambientes Oracle Linux 10.1**, utilizando **Ansible** como ferramenta de automação. 
+
+O diferencial desta arquitetura de infraestrutura como código (IaC) é a injeção nativa de suporte a workloads de Inteligência Artificial e aceleração gráfica para a GPU **NVIDIA RTX 3060** usando a especificação **CDI (Container Device Interface)** integrada diretamente sobre o Container Runtime Interface **CRI-O 1.31** e utilizando o motor de containers do host **Podman**.
 
 A solução foi projetada para ser:
 
-- **Reprodutível**: todo o processo é descrito como código (Infrastructure as Code).
-- **Flexível**: suporte a diferentes perfis de instância (pequena, média, grande) com parâmetros de performance pré-definidos.
-- **Integrado**: pipeline CI/CD via GitHub Actions para execução automatizada.
-- **Seguro**: acesso via SSH com chave pública e gerenciamento de secrets.
-
+- **Reprodutível**: Todo o ciclo de vida do cluster (instalação e expurgo) é descrito estritamente como código (IaC).
+- **Altamente Integrado**: Provisionamento dinâmico via pipeline de CI/CD GitHub Actions executado em runners locais auto-hospedados (*self-hosted*).
+- **Otimizado para IA**: Isolamento e entrega direta da GPU RTX 3060 via CDI para o nó de processamento (Worker), evitando degradação de runtime.
+- **Seguro**: Comunicação baseada em SSH Key pairs de nível administrativo e total conformidade com Cgroupsv2 (Systemd driver).
 
 ---
 
@@ -25,54 +26,39 @@ A solução foi projetada para ser:
 
 | Funcionalidade | Descrição |
 |----------------|-----------|
-| **Instalação automatizada** | Instalação do PostgreSQL 18 a partir do repositório oficial PGDG. |
-| **Configuração dinâmica** | Aplicação de parâmetros de performance conforme a classe da instância. |
-| **Inicialização do cluster** | Execução do `initdb` e criação da estrutura de dados. |
-| **Gerenciamento de serviço** | Habilitação e inicialização do serviço `postgresql-18` via systemd. |
-| **Desinstalação controlada** | Playbook para remoção completa do ambiente. |
-| **CI/CD com GitHub Actions** | Pipelines para deploy e desinstalação acionados manualmente ou via push. |
+| **Preparação do Host** | Carga automatizada dos módulos `overlay`/`br_netfilter` e parametrização do Sysctl para segurança e roteamento de redes internas do cluster. |
+| **Runtime de Container Isolado** | Instalação e provisionamento do CRI-O 1.31 como o motor do Kubernetes sob as regras do Systemd Cgroup Driver. |
+| **Instalação do Kubernetes** | Provisionamento estruturado dos binários `kubeadm`, `kubectl` e `kubelet` v1.31 fixados via gerenciador DNF. |
+| **Aceleração via CDI** | Detecção automatizada de hardware NVIDIA no Worker, injeção do NVIDIA Container Toolkit e geração dinâmica da especificação CDI `/etc/cdi/nvidia.yaml`. |
+| **Desinstalação Controlada (Purge)** | Limpeza profunda do host, incluindo desmontagem de montagens do Kubernetes, remoção completa de pacotes do DNF, exclusão de interfaces de rede residuais do CRI-O e reversão de regras do IPtables. |
 
 ---
 
 ## 🏗️ Estrutura do Projeto
 
 ```plaintext
-ol10-pg18-ansible/
+ol10-k8s-podman-ansible/
 ├── .github/
 │   └── workflows/
-│       ├── deploy-postgres.yml     # Pipeline de deploy
-│       └── uninstall.yml           # Pipeline de desinstalação
+│       ├── deploy-k8s.yml          # Pipeline de deploy automatizado via Actions
+│       └── uninstall-k8s.yml       # Pipeline de desinstalação controlada via Actions
 ├── group_vars/
-│   ├── all/
-│   │   └── vars.yml                # Variáveis comuns (versão, repositório, etc.)
-│   ├── pg_classe_pequena/
-│   │   └── vars.yml                # Parâmetros para instâncias pequenas
-│   ├── pg_classe_media/
-│   │   └── vars.yml                # Parâmetros para instâncias médias
-│   └── pg_classe_grande/
-│       └── vars.yml                # Parâmetros para instâncias grandes
+│   └── all/
+│       └── vars.yml                # Variáveis globais do cluster (K8s, CRI-O, Repositórios)
 ├── inventory/
-│   └── production                  # Inventário dos hosts gerenciados
+│   └── production                  # Inventário mapeando os hosts de Control Plane e Workers
 ├── playbooks/
-│   ├── site.yml                    # Playbook principal de provisionamento
-│   └── uninstall.yml               # Playbook de desinstalação
+│   ├── site.yml                    # Playbook principal de provisionamento da role
+│   └── uninstall.yml               # Playbook de destruição, limpeza e rollback total do host
 ├── roles/
-│   └── postgresql/
+│   └── kubernetes-gpu/
 │       ├── handlers/
-│       │   └── main.yml            # Handlers (ex: restart do serviço)
-│       ├── tasks/
-│       │   ├── main.yml            # Orquestração das tarefas
-│       │   ├── install.yml         # Instalação dos pacotes
-│       │   ├── init.yml            # Inicialização do cluster
-│       │   ├── configure.yml       # Configuração dos templates
-│       │   └── uninstall.yml       # Remoção do ambiente
-│       ├── templates/
-│       │   ├── postgresql.conf.j2  # Template do arquivo de configuração
-│       │   └── pg_hba.conf.j2      # Template das regras de autenticação
-│       └── vars/
-│           └── main.yml            # Variáveis padrão da role
-├── ansible.cfg                     # Configuração do Ansible
-└── README.md                       # Este arquivo
+│       │   └── main.yml            # Gatilhos para recarga do CRI-O e parâmetros de Sysctl
+│       └── tasks/
+│           └── main.yml            # Tasks lineares ordenadas para execução da arquitetura
+├── ansible.cfg                     # Configurações de conexão estáveis para o Oracle Linux 10
+└── README.md                       # Este arquivo descritivo
+
 ```
 
 ---
@@ -80,164 +66,149 @@ ol10-pg18-ansible/
 ## 🧩 Principais Arquivos e suas Funções
 
 ### `playbooks/site.yml`
-Playbook principal que orquestra o provisionamento completo do PostgreSQL. Executa a role `postgresql` nos hosts definidos no inventário.
+
+O playbook principal que orquestra todo o processo de deploy. Ele chama de forma declarativa a role de automação `kubernetes-gpu` aplicando as tarefas de forma homogênea a todos os membros do grupo mapeado no inventário.
 
 ### `playbooks/uninstall.yml`
-Playbook para desinstalação controlada do PostgreSQL, removendo pacotes, diretórios de dados e desabilitando o serviço.
 
-### `group_vars/`
-Diretório que organiza as variáveis por grupo de hosts:
-- `all/vars.yml`: define a versão do PostgreSQL, repositório, diretórios e usuário.
-- `pg_classe_*`: define parâmetros de performance (`max_connections`, `shared_buffers`, `work_mem`, etc.) para cada perfil de instância.
+Playbook de emergência e governança focado no estado de expurgo total. Remove todos os binários, travas de arquivos, dados de volumes do Kubelet, limpa as regras de IPtables que poluem as chains de roteamento de rede e retorna o estado operacional limpo para as VMs.
 
-### `roles/postgresql/`
-Role Ansible que encapsula toda a lógica de instalação e configuração:
-- **install.yml**: adiciona o repositório PGDG e instala o pacote `postgresql18-server`.
-- **init.yml**: executa o `initdb` para criar o cluster de dados (apenas se o arquivo `PG_VERSION` não existir).
-- **configure.yml**: aplica os templates `postgresql.conf.j2` e `pg_hba.conf.j2` com os parâmetros definidos.
-- **uninstall.yml**: remove pacotes, diretórios e o serviço.
+### `group_vars/all/vars.yml`
 
-### `templates/`
-Arquivos Jinja2 que geram as configurações finais do PostgreSQL com base nas variáveis fornecidas.
+Centraliza a declaração declarativa de versões globais estáveis (`kubernetes_version: "1.31"` e `crio_version: "1.31"`), módulos obrigatórios do kernel Linux e endpoints de repositórios confiáveis de RPM para o Oracle Linux 10.
+
+### `roles/kubernetes-gpu/tasks/main.yml`
+
+Contém a sequência de automação. Executa a configuração de baixo nível do kernel, provisiona o CRI-O e o Kubernetes. Utiliza uma estrutura condicional baseada no fato do Ansible (`inventory_hostname in groups['workers']`) para aplicar a instalação do NVIDIA Container Toolkit, mapear a GPU RTX 3060 via `nvidia-ctk cdi generate` e atualizar o motor do CRI-O com suporte a CDI apenas nos Workers selecionados.
 
 ---
 
 ## ⚙️ Tecnologias Utilizadas
 
 | Tecnologia | Versão | Finalidade |
-|------------|--------|------------|
-| **Oracle Linux** | 10 | Sistema operacional base (host e alvo). |
-| **PostgreSQL** | 18 | Sistema de gerenciamento de banco de dados. |
-| **Ansible** | 2.9+ | Automação de provisionamento e configuração. |
-| **GitHub Actions** | — | Pipeline CI/CD para execução automatizada. |
-| **Jinja2** | — | Template engine para arquivos de configuração dinâmicos. |
+| --- | --- | --- |
+| **Oracle Linux** | 10.1 | Sistema operacional corporativo estável para hosts e nós. |
+| **Kubernetes** | 1.31 | Plataforma de orquestração de containers de nível de produção. |
+| **CRI-O** | 1.31 | Container Runtime nativo leve otimizado para o ecossistema Kubernetes. |
+| **Podman** | Nativo | Motor nativo de gerenciamento local de imagens no host Oracle Linux 10. |
+| **NVIDIA CDI** | v1 | Container Device Interface para exposição direta da GPU RTX 3060 ao CRI-O. |
+| **Ansible** | 2.16+ | Orquestração declarativa da Infraestrutura como Código (IaC). |
 
 ---
 
 ## 🔄 Integração Contínua (CI/CD) com GitHub Actions
 
-O projeto conta com dois workflows configurados no diretório `.github/workflows/`:
+O projeto possui automação integrada via dois fluxos declarativos no GitHub Actions (`.github/workflows/`):
 
-### `deploy-postgres.yml`
-- **Trigger**: `workflow_dispatch` (execução manual).
-- **Executor**: `self-hosted` (runner instalado na própria VM Oracle Linux 10).
-- **Etapas**:
-  1. Checkout do código.
-  2. Instalação do Ansible (se necessário).
-  3. Execução do playbook `site.yml`.
+### 1. `deploy-k8s.yml`
 
-### `uninstall.yml`
-- **Trigger**: `workflow_dispatch` (execução manual).
-- **Executor**: `self-hosted`.
-- **Etapas**:
-  1. Checkout do código.
-  2. Execução do playbook `uninstall.yml`.
+* **Trigger**: `workflow_dispatch` (Executado de forma manual sob demanda na aba "Actions").
+* **Executor**: `self-hosted` (Executado no runner interno instalado em sua infraestrutura).
+* **Escopo**: Garante integridade do checkout do código, validação de sintaxe e chamada de provisionamento do `playbooks/site.yml`.
 
-> **Observação**: Os workflows utilizam um **runner auto-hospedado** configurado na VM alvo, garantindo que a execução ocorra no ambiente Oracle Linux 10 real, sem dependência de containers ou emuladores.
+### 2. `uninstall-k8s.yml`
+
+* **Trigger**: `workflow_dispatch` (Executado manualmente).
+* **Executor**: `self-hosted`.
+* **Escopo**: Invoca de maneira controlada a remoção completa da infraestrutura do cluster a partir do playbook `playbooks/uninstall.yml`.
 
 ---
 
-## 📦 Pré‑requisitos
+## 📦 Pré-requisitos
 
-Antes de executar o projeto, certifique-se de que:
+Antes de iniciar a execução da automação, certifique-se de validar os seguintes pontos de conformidade nos nós de destino:
 
-- ✅ A **máquina de controle** (onde o Ansible será executado) possui o Ansible instalado.
-- ✅ A **VM alvo** está rodando **Oracle Linux 10** com Python 3 instalado.
-- ✅ O **acesso SSH** da máquina de controle para a VM alvo está configurado (de preferência com chave pública).
-- ✅ O repositório GitHub está clonado localmente ou acessível via CI/CD.
+* ✅ **Acesso SSH Sem Senha**: O runner local deve possuir chave SSH pública implantada no arquivo `/root/.ssh/authorized_keys` de ambas as máquinas (`KUBERMASTER` e `KUBERWORKER1`).
+* ✅ **NVIDIA Drivers Instalados**: O driver proprietário estável da NVIDIA deve estar previamente configurado e operacional no nó `KUBERWORKER1` (com validação funcional via comando `nvidia-smi`).
+* ✅ **Python 3 Instalado**: Ambas as instâncias devem ter o pacote `python3` nativo no caminho `/usr/bin/python3`.
+* ✅ **Mecanismo de Resolução de Nomes**: Ambos os nós devem conseguir se comunicar via rede interna e resolver os IPs do inventário.
 
 ---
 
 ## 🛠️ Como Utilizar
 
 ### 1. Clonar o repositório
+
 ```bash
-git clone https://github.com/danilo01arrudal/ol10-pg18-ansible.git
-cd ol10-pg18-ansible
+git clone [https://github.com/danilo01arrudal/ol10-k8s-podman-ansible.git](https://github.com/danilo01arrudal/ol10-k8s-podman-ansible.git)
+cd ol10-k8s-podman-ansible
+
 ```
 
-### 2. Ajustar o inventário
-Edite o arquivo `inventory/production` com o IP e usuário da VM alvo:
+### 2. Validar ou Ajustar o Inventário
+
+Verifique as configurações das suas instâncias no arquivo `inventory/production`:
+
 ```ini
-[servidores]
-ol10pg18 ansible_host=192.168.1.100 ansible_user=root
+[control_plane]
+KUBERMASTER ansible_host=192.168.0.40
 
-[servidores:vars]
-ansible_python_interpreter=/usr/bin/python3
+[workers]
+KUBERWORKER1 ansible_host=192.168.0.41
+
 ```
 
-### 3. Escolher a classe da instância
-No inventário, adicione a variável `pg_classe` com o valor desejado (`pequena`, `media` ou `grande`):
-```ini
-ol10pg18 ansible_host=192.168.1.100 ansible_user=root pg_classe=media
-```
+### 3. Execução Manual via Terminal local
 
-### 4. Executar o playbook
+Para disparar localmente toda a infraestrutura diretamente da sua máquina de controle:
+
 ```bash
 ansible-playbook -i inventory/production playbooks/site.yml
+
 ```
 
-### 5. Desinstalar (se necessário)
+### 4. Execução de Desinstalação (Reset Completo do Ambiente)
+
+Para reverter todas as modificações aplicadas aos servidores e limpar completamente os módulos de kernel e pacotes instalados:
+
 ```bash
 ansible-playbook -i inventory/production playbooks/uninstall.yml
+
 ```
 
 ---
 
-## 🔐 Configuração do Runner Auto-Hospedado (para CI/CD)
+## 🔐 Configuração do Runner Auto-Hospedado (Self-Hosted para CI/CD)
 
-Para que os workflows do GitHub Actions funcionem, é necessário instalar um runner na VM Oracle Linux 10:
+Para integrar a automação nativamente aos workflows do GitHub Actions do seu repositório, configure o seu **Runner Self-Hosted** diretamente no host local ou em um nó que possua acesso de rede aos servidores do cluster:
 
 ```bash
-# Criar diretório e baixar o runner
+# Criar o diretório de destino do runner
 mkdir ~/actions-runner && cd ~/actions-runner
-curl -o actions-runner-linux-x64-2.335.1.tar.gz -L https://github.com/actions/runner/releases/download/v2.335.1/actions-runner-linux-x64-2.335.1.tar.gz
+
+# Download do runner estável para plataforma Linux x64
+curl -o actions-runner-linux-x64-2.335.1.tar.gz -L [https://github.com/actions/runner/releases/download/v2.335.1/actions-runner-linux-x64-2.335.1.tar.gz](https://github.com/actions/runner/releases/download/v2.335.1/actions-runner-linux-x64-2.335.1.tar.gz)
 tar xzf ./actions-runner-linux-x64-2.335.1.tar.gz
 
-# Configurar (substitua o token pelo fornecido pelo GitHub)
-./config.sh --url https://github.com/danilo01arrudal/ol10-pg18-ansible --token SEU_TOKEN
+# Configuração e Registro (Substitua "SEU_TOKEN" com o Token dinâmico provido pelas configurações do GitHub)
+./config.sh --url [https://github.com/danilo01arrudal/ol10-k8s-podman-ansible](https://github.com/danilo01arrudal/ol10-k8s-podman-ansible) --token SEU_TOKEN
 
-# Instalar como serviço systemd
-./svc.sh install
-./svc.sh start
+# Instalação e inicialização do serviço do runner em nível de systemd daemon
+sudo ./svc.sh install
+sudo ./svc.sh start
+
 ```
-
----
-
-## 📝 Personalização
-
-### Adicionar uma nova classe de instância
-1. Crie um diretório em `group_vars/pg_classe_nova/`.
-2. Dentro, crie um arquivo `vars.yml` com os parâmetros desejados.
-3. No inventário, defina `pg_classe=nova`.
-
-### Alterar parâmetros padrão
-Edite o arquivo `roles/postgresql/vars/main.yml` para modificar os valores padrão da role.
 
 ---
 
 ## 🤝 Contribuição
 
-Contribuições são bem-vindas! Sinta-se à vontade para abrir issues ou pull requests com melhorias, correções ou novas funcionalidades.
+Contribuições para aprimorar as regras de configuração CDI e automação do Kubernetes no Oracle Linux 10 são sempre muito bem-vindas! Sinta-se confortável para abrir novas issues ou submeter Pull Requests.
 
 ---
 
 ## 📄 Licença
 
-Este projeto está sob a licença MIT. Consulte o arquivo [LICENSE](LICENSE) para mais detalhes.
+Este projeto é disponibilizado sob a licença comercial/pessoal **MIT**. Consulte o arquivo [LICENSE](https://www.google.com/search?q=LICENSE) para mais detalhes.
 
 ---
 
 ## 👤 Autor
 
-**Danilo Arruda**  
-- GitHub: [@danilo01arrudal](https://github.com/danilo01arrudal)
-
----
+**Danilo Arruda** - GitHub: [@danilo01arrudal](https://github.com/danilo01arrudal)
 
 ## 🙏 Agradecimentos
 
-- [PostgreSQL Global Development Group](https://www.postgresql.org/) pela excelente base de dados.
 - [Ansible](https://www.ansible.com/) pela poderosa ferramenta de automação.
 - [Oracle Linux](https://www.oracle.com/linux/) pela plataforma estável e confiável.
-```
+- [Kubernetes]{https://kubernetes.io/} pela ferramenta de gerenciamento de containers.
