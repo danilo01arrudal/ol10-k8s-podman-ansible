@@ -65,19 +65,19 @@ ol10-k8s-podman-ansible/
 
 ## 🧩 Principais Arquivos e suas Funções
 
-### `playbooks/site.yml`
+#### `playbooks/site.yml`
 
 O playbook principal que orquestra todo o processo de deploy. Ele chama de forma declarativa a role de automação `kubernetes-gpu` aplicando as tarefas de forma homogênea a todos os membros do grupo mapeado no inventário.
 
-### `playbooks/uninstall.yml`
+#### `playbooks/uninstall.yml`
 
 Playbook de emergência e governança focado no estado de expurgo total. Remove todos os binários, travas de arquivos, dados de volumes do Kubelet, limpa as regras de IPtables que poluem as chains de roteamento de rede e retorna o estado operacional limpo para as VMs.
 
-### `group_vars/all/vars.yml`
+#### `group_vars/all/vars.yml`
 
 Centraliza a declaração declarativa de versões globais estáveis (`kubernetes_version: "1.31"` e `crio_version: "1.31"`), módulos obrigatórios do kernel Linux e endpoints de repositórios confiáveis de RPM para o Oracle Linux 10.
 
-### `roles/kubernetes-gpu/tasks/main.yml`
+#### `roles/kubernetes-gpu/tasks/main.yml`
 
 Contém a sequência de automação. Executa a configuração de baixo nível do kernel, provisiona o CRI-O e o Kubernetes. Utiliza uma estrutura condicional baseada no fato do Ansible (`inventory_hostname in groups['workers']`) para aplicar a instalação do NVIDIA Container Toolkit, mapear a GPU RTX 3060 via `nvidia-ctk cdi generate` e atualizar o motor do CRI-O com suporte a CDI apenas nos Workers selecionados.
 
