@@ -100,13 +100,13 @@ Contém a sequência de automação. Executa a configuração de baixo nível do
 
 O projeto possui automação integrada via dois fluxos declarativos no GitHub Actions (`.github/workflows/`):
 
-### 1. `deploy-k8s.yml`
+#### 1. `deploy-k8s.yml`
 
 * **Trigger**: `workflow_dispatch` (Executado de forma manual sob demanda na aba "Actions").
 * **Executor**: `self-hosted` (Executado no runner interno instalado em sua infraestrutura).
 * **Escopo**: Garante integridade do checkout do código, validação de sintaxe e chamada de provisionamento do `playbooks/site.yml`.
 
-### 2. `uninstall-k8s.yml`
+#### 2. `uninstall-k8s.yml`
 
 * **Trigger**: `workflow_dispatch` (Executado manualmente).
 * **Executor**: `self-hosted`.
@@ -127,7 +127,7 @@ Antes de iniciar a execução da automação, certifique-se de validar os seguin
 
 ## 🛠️ Como Utilizar
 
-### 1. Clonar o repositório
+#### 1. Clonar o repositório
 
 ```bash
 git clone [https://github.com/danilo01arrudal/ol10-k8s-podman-ansible.git](https://github.com/danilo01arrudal/ol10-k8s-podman-ansible.git)
@@ -135,7 +135,7 @@ cd ol10-k8s-podman-ansible
 
 ```
 
-### 2. Validar ou Ajustar o Inventário
+#### 2. Validar ou Ajustar o Inventário
 
 Verifique as configurações das suas instâncias no arquivo `inventory/production`:
 
@@ -148,7 +148,7 @@ KUBERWORKER1 ansible_host=192.168.0.41
 
 ```
 
-### 3. Execução Manual via Terminal local
+#### 3. Execução Manual via Terminal local
 
 Para disparar localmente toda a infraestrutura diretamente da sua máquina de controle:
 
@@ -157,7 +157,7 @@ ansible-playbook -i inventory/production playbooks/site.yml
 
 ```
 
-### 4. Execução de Desinstalação (Reset Completo do Ambiente)
+#### 4. Execução de Desinstalação (Reset Completo do Ambiente)
 
 Para reverter todas as modificações aplicadas aos servidores e limpar completamente os módulos de kernel e pacotes instalados:
 
