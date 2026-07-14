@@ -1,4 +1,4 @@
-# ☸️ Provisionamento Automatizado de um Cluster Kubernetes Multi-Node com Suporte a GPU NVIDIA via CDI no Oracle Linux 10.1
+# ☸️ Provisionamento Automatizado de um Cluster Kubernetes Single-Node com Suporte a GPU NVIDIA via CDI no Oracle Linux 10.1
 
 [![GitHub](https://img.shields.io/badge/Repository-danilo01arrudal/ol10--k8s--podman--ansible-blue?logo=github)](https://github.com/danilo01arrudal/ol10-k8s-podman-ansible)
 [![Ansible](https://img.shields.io/badge/Ansible-2.16+-black?logo=ansible)](https://www.ansible.com/)
@@ -9,16 +9,16 @@
 
 ## 📋 Visão Geral
 
-Este projeto tem como objetivo **automatizar o processo de instalação, configuração, orquestração e gerenciamento de um cluster Kubernetes v1.31 multi-node em ambientes Oracle Linux 10.1**, utilizando **Ansible** como ferramenta de automação. 
+Este projeto tem como objetivo **automatizar o processo de instalação, configuração, orquestração e gerenciamento de um cluster Kubernetes v1.31 Single-Node (All-in-One) em ambiente Oracle Linux 10.1**, utilizando **Ansible** como ferramenta de automação.
 
-O diferencial desta arquitetura de infraestrutura como código (IaC) é a injeção nativa de suporte a workloads de Inteligência Artificial e aceleração gráfica para a GPU **NVIDIA RTX 3060** usando a especificação **CDI (Container Device Interface)** integrada diretamente sobre o Container Runtime Interface **CRI-O 1.31** e utilizando o motor de containers do host **Podman**.
+A solução foi projetada especificamente para consolidar toda a infraestrutura no host físico **192.168.0.40**, acumulando os papéis de Control Plane e nó de processamento (Worker). O grande diferencial desta arquitetura de infraestrutura como código (IaC) é a injeção nativa de suporte a workloads de Inteligência Artificial e aceleração gráfica para a GPU **NVIDIA RTX 3060** usando a especificação **CDI (Container Device Interface)** integrada diretamente sobre o Container Runtime Interface **CRI-O 1.31** e utilizando o motor de containers do host **Podman**.
 
 A solução foi projetada para ser:
 
 - **Reprodutível**: Todo o ciclo de vida do cluster (instalação e expurgo) é descrito estritamente como código (IaC).
-- **Altamente Integrado**: Provisionamento dinâmico via pipeline de CI/CD GitHub Actions executado em runners locais auto-hospedados (*self-hosted*).
-- **Otimizado para IA**: Isolamento e entrega direta da GPU RTX 3060 via CDI para o nó de processamento (Worker), evitando degradação de runtime.
-- **Seguro**: Comunicação baseada em SSH Key pairs de nível administrativo e total conformidade com Cgroupsv2 (Systemd driver).
+- **Otimizada para IA & Single-Host**: Ideal para laboratórios de desenvolvimento, engenharia de dados e inferência local, eliminando o overhead de múltiplos servidores físicos.
+- **Altamente Integrada**: Provisionamento dinâmico via pipeline de CI/CD GitHub Actions executado em runners locais auto-hospedados (*self-hosted*).
+- **Segura**: Comunicação baseada em SSH Key pairs de nível administrativo e total conformidade com Cgroupsv2 (Systemd driver).
 
 ---
 
@@ -26,11 +26,11 @@ A solução foi projetada para ser:
 
 | Funcionalidade | Descrição |
 |----------------|-----------|
-| **Preparação do Host** | Carga automatizada dos módulos `overlay`/`br_netfilter` e parametrização do Sysctl para segurança e roteamento de redes internas do cluster. |
+| **Preparação do Host** | Carga automatizada dos módulos `overlay`/`br_netfilter` e parametrização do Sysctl para segurança e roteamento de rede do nó único. |
 | **Runtime de Container Isolado** | Instalação e provisionamento do CRI-O 1.31 como o motor do Kubernetes sob as regras do Systemd Cgroup Driver. |
 | **Instalação do Kubernetes** | Provisionamento estruturado dos binários `kubeadm`, `kubectl` e `kubelet` v1.31 fixados via gerenciador DNF. |
-| **Aceleração via CDI** | Detecção automatizada de hardware NVIDIA no Worker, injeção do NVIDIA Container Toolkit e geração dinâmica da especificação CDI `/etc/cdi/nvidia.yaml`. |
-| **Desinstalação Controlada (Purge)** | Limpeza profunda do host, incluindo desmontagem de montagens do Kubernetes, remoção completa de pacotes do DNF, exclusão de interfaces de rede residuais do CRI-O e reversão de regras do IPtables. |
+| **Aceleração via CDI Local** | Detecção automatizada de hardware NVIDIA no host único, injeção do NVIDIA Container Toolkit e geração dinâmica da especificação CDI `/etc/cdi/nvidia.yaml`. |
+| **Desinstalação Controlada (Purge)** | Limpeza profunda do host físico, incluindo remoção completa de pacotes do DNF, exclusão de interfaces de rede residuais do CRI-O e reversão de regras do IPtables. |
 
 ---
 
@@ -46,7 +46,7 @@ ol10-k8s-podman-ansible/
 │   └── all/
 │       └── vars.yml                # Variáveis globais do cluster (K8s, CRI-O, Repositórios)
 ├── inventory/
-│   └── production                  # Inventário mapeando os hosts de Control Plane e Workers
+│   └── production                  # Inventário simplificado mapeando o host único (All-in-One)
 ├── playbooks/
 │   ├── site.yml                    # Playbook principal de provisionamento da role
 │   └── uninstall.yml               # Playbook de destruição, limpeza e rollback total do host
@@ -55,7 +55,7 @@ ol10-k8s-podman-ansible/
 │       ├── handlers/
 │       │   └── main.yml            # Gatilhos para recarga do CRI-O e parâmetros de Sysctl
 │       └── tasks/
-│           └── main.yml            # Tasks lineares ordenadas para execução da arquitetura
+│           └── main.yml            # Tasks lineares ordenadas para execução da arquitetura no nó único
 ├── ansible.cfg                     # Configurações de conexão estáveis para o Oracle Linux 10
 └── README.md                       # Este arquivo descritivo
 
@@ -67,11 +67,11 @@ ol10-k8s-podman-ansible/
 
 #### `playbooks/site.yml`
 
-O playbook principal que orquestra todo o processo de deploy. Ele chama de forma declarativa a role de automação `kubernetes-gpu` aplicando as tarefas de forma homogênea a todos os membros do grupo mapeado no inventário.
+O playbook principal que orquestra todo o processo de deploy. Ele chama de forma declarativa a role de automação `kubernetes-gpu` aplicando as tarefas de forma direta ao host único mapeado no grupo `k8s_node`.
 
 #### `playbooks/uninstall.yml`
 
-Playbook de emergência e governança focado no estado de expurgo total. Remove todos os binários, travas de arquivos, dados de volumes do Kubelet, limpa as regras de IPtables que poluem as chains de roteamento de rede e retorna o estado operacional limpo para as VMs.
+Playbook de emergência e governança focado no estado de expurgo total. Remove todos os binários, travas de arquivos, dados de volumes do Kubelet, limpa as regras de IPtables que poluem as chains de roteamento de rede e retorna o estado operacional limpo para o servidor.
 
 #### `group_vars/all/vars.yml`
 
@@ -79,7 +79,7 @@ Centraliza a declaração declarativa de versões globais estáveis (`kubernetes
 
 #### `roles/kubernetes-gpu/tasks/main.yml`
 
-Contém a sequência de automação. Executa a configuração de baixo nível do kernel, provisiona o CRI-O e o Kubernetes. Utiliza uma estrutura condicional baseada no fato do Ansible (`inventory_hostname in groups['workers']`) para aplicar a instalação do NVIDIA Container Toolkit, mapear a GPU RTX 3060 via `nvidia-ctk cdi generate` e atualizar o motor do CRI-O com suporte a CDI apenas nos Workers selecionados.
+Contém a sequência de automação fim a fim. Como o ambiente é Single-Node, as tarefas de preparação de rede, instalação do Kubernetes, injeção do NVIDIA Container Toolkit e mapeamento CDI são executadas de forma homogênea e direta no host físico, sem a necessidade de filtros condicionais por grupo.
 
 ---
 
@@ -116,12 +116,11 @@ O projeto possui automação integrada via dois fluxos declarativos no GitHub Ac
 
 ## 📦 Pré-requisitos
 
-Antes de iniciar a execução da automação, certifique-se de validar os seguintes pontos de conformidade nos nós de destino:
+Antes de iniciar a execução da automação, certifique-se de validar os seguintes pontos de conformidade no nó de destino:
 
-* ✅ **Acesso SSH Sem Senha**: O runner local deve possuir chave SSH pública implantada no arquivo `/root/.ssh/authorized_keys` de ambas as máquinas (`KUBERMASTER` e `KUBERWORKER1`).
-* ✅ **NVIDIA Drivers Instalados**: O driver proprietário estável da NVIDIA deve estar previamente configurado e operacional no nó `KUBERWORKER1` (com validação funcional via comando `nvidia-smi`).
-* ✅ **Python 3 Instalado**: Ambas as instâncias devem ter o pacote `python3` nativo no caminho `/usr/bin/python3`.
-* ✅ **Mecanismo de Resolução de Nomes**: Ambos os nós devem conseguir se comunicar via rede interna e resolver os IPs do inventário.
+* ✅ **Acesso SSH Sem Senha**: O runner local deve possuir chave SSH pública implantada no arquivo `/root/.ssh/authorized_keys` do host físico (`192.168.0.40`).
+* ✅ **NVIDIA Drivers Instalados**: O driver proprietário estável da NVIDIA deve estar previamente configurado e operacional no host (com validação funcional via comando `nvidia-smi`).
+* ✅ **Python 3 Instalado**: O host deve ter o pacote `python3` nativo no caminho `/usr/bin/python3`.
 
 ---
 
@@ -140,11 +139,8 @@ cd ol10-k8s-podman-ansible
 Verifique as configurações das suas instâncias no arquivo `inventory/production`:
 
 ```ini
-[control_plane]
-KUBERMASTER ansible_host=192.168.0.40
-
-[workers]
-KUBERWORKER1 ansible_host=192.168.0.41
+[k8s_node]
+KUBERSINGLE ansible_host=192.168.0.40
 
 ```
 
@@ -157,9 +153,28 @@ ansible-playbook -i inventory/production playbooks/site.yml
 
 ```
 
-#### 4. Execução de Desinstalação (Reset Completo do Ambiente)
+#### 4. Pós-Instalação: Inicialização e Destravamento do Nó Único
 
-Para reverter todas as modificações aplicadas aos servidores e limpar completamente os módulos de kernel e pacotes instalados:
+Uma vez finalizada a execução do Ansible com sucesso, acesse o servidor `192.168.0.40` e execute os passos abaixo para inicializar o cluster e permitir o agendamento de Pods no nó de controle:
+
+```bash
+# Inicializar o Control Plane com suporte ao socket do CRI-O
+kubeadm init --pod-network-cidr=10.244.0.0/16 --cri-socket=unix:///var/run/crio/crio.sock
+
+# Configurar as credenciais administrativas locais do kubectl
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+# IMPORTANTE: Remover o taint padrão do Control Plane para viabilizar workloads single-host
+kubectl taint nodes --all node-role.kubernetes.io/control-plane-
+kubectl taint nodes --all node-role.kubernetes.io/master- || true
+
+```
+
+#### 5. Execução de Desinstalação (Reset Completo do Ambiente)
+
+Para reverter todas as modificações aplicadas ao servidor e limpar completamente os módulos de kernel e pacotes instalados:
 
 ```bash
 ansible-playbook -i inventory/production playbooks/uninstall.yml
@@ -170,7 +185,7 @@ ansible-playbook -i inventory/production playbooks/uninstall.yml
 
 ## 🔐 Configuração do Runner Auto-Hospedado (Self-Hosted para CI/CD)
 
-Para integrar a automação nativamente aos workflows do GitHub Actions do seu repositório, configure o seu **Runner Self-Hosted** diretamente no host local ou em um nó que possua acesso de rede aos servidores do cluster:
+Para integrar a automação nativamente aos workflows do GitHub Actions do seu repositório, configure o seu **Runner Self-Hosted** diretamente no host local ou em um nó que possua acesso de rede ao servidor do cluster:
 
 ```bash
 # Criar o diretório de destino do runner
@@ -209,6 +224,6 @@ Este projeto é disponibilizado sob a licença comercial/pessoal **MIT**. Consul
 
 ## 🙏 Agradecimentos
 
-- [Ansible](https://www.ansible.com/) pela poderosa ferramenta de automação.
-- [Oracle Linux](https://www.oracle.com/linux/) pela plataforma estável e confiável.
-- [Kubernetes]{https://kubernetes.io/} pela ferramenta de gerenciamento de containers.
+* [Ansible](https://www.ansible.com/) pela poderosa ferramenta de automação.
+* [Oracle Linux](https://www.oracle.com/linux/) pela plataforma estável e confiável.
+* [Kubernetes](https://kubernetes.io/) pela ferramenta de gerenciamento de containers.
