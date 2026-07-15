@@ -1,14 +1,14 @@
 name: Deploy Kubernetes Cluster
 
 on:
-  [cite_start]workflow_dispatch: # Execução manual sob demanda [cite: 108]
+  workflow_dispatch: # Execução manual sob demanda
 
 jobs:
   deploy:
-    [cite_start]runs-on: self-hosted # Roda no seu runner local na VM 192.168.122.22 [cite: 109]
+    runs-on: self-hosted # Roda no seu runner local na VM 192.168.122.22
     steps:
       - name: Checkout do Código
-        [cite_start]uses: actions/checkout@v4 [cite: 110]
+        uses: actions/checkout@v4
 
       - name: Rodar Playbook de Provisionamento e Inicialização do Cluster
         run: |
