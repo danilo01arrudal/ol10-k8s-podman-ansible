@@ -7,8 +7,22 @@ jobs:
   test-gpu:
     runs-on: self-hosted
     steps:
-      - name: Apply GPU test pod
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
         run: |
-          kubectl apply -f manifests/gpu-test-pod.yaml
-          kubectl wait --for=condition=ready pod/gpu-validation-pod --timeout=60s
-          kubectl logs gpu-validation-pod
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 192.168.0.40 >> ~/.ssh/known_hosts
+
+      - name: Copy GPU test manifest to master
+        run: |
+          scp -o StrictHostKeyChecking=no manifests/gpu-test-pod.yaml root@192.168.0.40:/tmp/
+
+      - name: Apply GPU test pod via SSH
+        run: |
+          ssh -o StrictHostKeyChecking=no root@192.168.0.40 "kubectl apply -f /tmp/gpu-test-pod.yaml"
+          ssh -o StrictHostKeyChecking=no root@192.168.0.40 "kubectl wait --for=condition=ready pod/gpu-validation-pod --timeout=60s"
+          ssh -o StrictHostKeyChecking=no root@192.168.0.40 "kubectl logs gpu-validation-pod"
