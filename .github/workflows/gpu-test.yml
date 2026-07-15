@@ -1,0 +1,14 @@
+name: GPU Validation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-gpu:
+    runs-on: self-hosted
+    steps:
+      - name: Apply GPU test pod
+        run: |
+          kubectl apply -f manifests/gpu-test-pod.yaml
+          kubectl wait --for=condition=ready pod/gpu-validation-pod --timeout=60s
+          kubectl logs gpu-validation-pod
