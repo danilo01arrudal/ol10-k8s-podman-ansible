@@ -1,0 +1,19 @@
+name: Cluster Health Check
+
+on:
+  workflow_run:
+    workflows: ["Deploy Kubernetes Cluster"]
+    types:
+      - completed
+
+jobs:
+  health:
+    runs-on: self-hosted
+    steps:
+      - name: Check nodes
+        run: |
+          kubectl get nodes -o wide
+          kubectl get pods -n kube-system
+      - name: Check GPU availability
+        run: |
+          kubectl get nodes -o json | jq '.items[] | {name:.metadata.name, gpu:.status.allocatable."nvidia.com/gpu"}'
