@@ -1,0 +1,35 @@
+name: Ansible Validation on Oracle Linux 10
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: self-hosted   # runner instalado no Oracle Linux 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Ansible and ansible-lint (if not present)
+        run: |
+          sudo dnf install -y ansible ansible-lint || true
+          pip3 install ansible-lint --user || true
+
+      - name: Lint playbook
+        run: ansible-lint ansible/k8s-cluster-prep.yml
+
+      - name: Syntax check
+        run: ansible-playbook ansible/k8s-cluster-prep.yml --syntax-check -i ansible/inventory.ini
+
+      - name: Dry-run (check mode) with sudo
+        env:
+          ANSIBLE_BECOME_PASS: ${{ secrets.SUDO_PASSWORD }}
+        run: |
+          ansible-playbook ansible/k8s-cluster-prep.yml \
+            --check \
+            -i ansible/inventory.ini \
+            --extra-vars "ansible_become_pass=$ANSIBLE_BECOME_PASS"
