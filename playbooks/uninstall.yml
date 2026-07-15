@@ -1,12 +1,10 @@
 ---
 - name: Desinstalação e Limpeza Completa do Cluster Kubernetes Single-Node
   hosts: k8s_node
-  # become: yes -> Removido pois já conectamos como root
   tasks:
     - name: Resetar o estado do kubeadm (se existir)
       command: kubeadm reset -f
       failed_when: false
-      ignore_errors: yes
 
     - name: Parar serviços
       service:
@@ -14,7 +12,6 @@
         state: stopped
         enabled: no
       failed_when: false
-      ignore_errors: yes
       loop:
         - kubelet
         - crio
@@ -44,13 +41,13 @@
         - /etc/sysctl.d/99-kubernetes.conf
         - /etc/modules-load.d/kubernetes.conf
         - /etc/cdi
+        - /root/.kube      # Adicionado para evitar conflito de credenciais antigas em futuros deploys
 
     - name: Descarregar módulos de kernel do Kubernetes
       modprobe:
         name: "{{ item }}"
         state: absent
       failed_when: false
-      ignore_errors: yes
       loop:
         - br_netfilter
         - overlay
@@ -60,7 +57,6 @@
         name: "{{ item.key }}"
         state: absent
       failed_when: false
-      ignore_errors: yes
       loop:
         - { key: 'net.bridge.bridge-nf-call-iptables' }
         - { key: 'net.bridge.bridge-nf-call-ip6tables' }
@@ -69,7 +65,6 @@
     - name: Limpar tabelas de regras do IPtables
       command: "{{ item }}"
       failed_when: false
-      ignore_errors: yes
       loop:
         - iptables -F
         - iptables -X
