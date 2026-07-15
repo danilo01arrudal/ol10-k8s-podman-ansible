@@ -1,6 +1,6 @@
 ---
-- name: Provisionamento do Nó Único Kubernetes com suporte a GPU NVIDIA (CDI)
+- name: Instalar e configurar Kubernetes com suporte a GPU (Nó Único)
   hosts: k8s_node
-  become: yes
+  # become: yes -> Removido pois já conectamos como root
   roles:
     - kubernetes-gpu
