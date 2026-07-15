@@ -1,127 +1,67 @@
----
-- name: Garantir que os módulos de kernel do Kubernetes sejam carregados na inicialização
-  copy:
-    dest: /etc/modules-load.d/kubernetes.conf
-    content: |
-      overlay
-      br_netfilter
-    owner: root
-    group: root
-    mode: '0644'
+# ==================== INICIALIZAÇÃO AUTOMÁTICA DO CLUSTER (POST-INSTALL) ====================
 
-- name: Carregar módulos de kernel de forma imediata
-  modprobe:
-    name: "{{ item }}"
-    state: present
-  loop: "{{ kernel_modules }}"
+- name: Verificar se o cluster Kubernetes já está inicializado
+  stat:
+    path: /etc/kubernetes/admin.conf
+  register: k8s_admin_conf
 
-- name: Configurar parâmetros sysctl de rede para Kubernetes
-  copy:
-    dest: /etc/sysctl.d/99-kubernetes.conf
-    content: |
-      net.bridge.bridge-nf-call-iptables  = 1
-      net.bridge.bridge-nf-call-ip6tables = 1
-      net.ipv4.ip_forward                 = 1
-    owner: root
-    group: root
-    mode: '0644'
-  notify: Aplicar sysctl
+- name: Inicializar o Control Plane do Kubernetes via kubeadm
+  command: kubeadm init --pod-network-cidr=10.244.0.0/16 --cri-socket=unix:///var/run/crio/crio.sock
+  register: kubeadm_init
+  when: not k8s_admin_conf.stat.exists
 
-- name: Forçar a aplicação imediata dos parâmetros sysctl
-  meta: flush_handlers
-
-- name: Adicionar repositório oficial do Kubernetes v1.31 (RPMs)
-  yum_repository:
-    name: kubernetes
-    description: Kubernetes Official Repository
-    baseurl: "{{ kubernetes_yum_repo_baseurl }}"
-    enabled: yes
-    gpgcheck: yes
-    repo_gpgcheck: no
-    gpgkey: "{{ kubernetes_yum_repo_gpgkey }}"
-
-- name: Adicionar repositório oficial do CRI-O v1.31 (RPMs)
-  yum_repository:
-    name: crio
-    description: CRI-O Stable Repository
-    baseurl: "{{ crio_yum_repo_baseurl }}"
-    enabled: yes
-    gpgcheck: yes
-    repo_gpgcheck: no
-    gpgkey: "{{ crio_yum_repo_gpgkey }}"
-
-- name: Instalar pacotes de infraestrutura do Kubernetes e Container Runtime (CRI-O)
-  dnf:
-    name:
-      - kubelet-{{ kubernetes_package_version }}
-      - kubeadm-{{ kubernetes_package_version }}
-      - kubectl-{{ kubernetes_package_version }}
-      - cri-o-{{ crio_package_version }}
-      - cri-tools
-    state: present
-    disable_excludes: kubernetes
-
-- name: Configurar CRI-O para usar drivers Systemd para cgroupsv2
-  copy:
-    dest: /etc/crio/crio.conf.d/01-cgroup-manager.conf
-    content: |
-      [crio.runtime]
-      conmon_cgroup = "system.slice"
-      cgroup_manager = "systemd"
-    owner: root
-    group: root
-    mode: '0644'
-  notify: Reiniciar crio
-
-- name: Habilitar e iniciar serviço do CRI-O
-  service:
-    name: crio
-    state: started
-    enabled: yes
-
-- name: Habilitar serviço do Kubelet para inicialização pós-kubeadm
-  service:
-    name: kubelet
-    enabled: yes
-
-# ==================== SUITE GPU NVIDIA RTX 3060 via CDI (NÓ ÚNICO) ====================
-
-- name: Adicionar Repositório NVIDIA Container Toolkit para RHEL/OL 10
-  get_url:
-    url: https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo
-    dest: /etc/yum.repos.d/nvidia-container-toolkit.repo
-    mode: '0644'
-
-- name: Instalar NVIDIA Container Toolkit
-  dnf:
-    name: nvidia-container-toolkit
-    state: present
-
-- name: Garantir que o diretório de especificação CDI exista
+- name: Garantir que o diretório .kube exista para o root do host
   file:
-    path: /etc/cdi
+    path: /root/.kube
     state: directory
     owner: root
     group: root
-    mode: '0755'
+    mode: '0700'
 
-- name: Gerar a especificação CDI para a GPU NVIDIA RTX 3060
-  command: nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
-  register: cdi_generation
-  changed_when: true
-  failed_when: cdi_generation.rc != 0
-
-- name: Validar e configurar injeção de runtime CDI no CRI-O do host
+- name: Copiar configuração administrativa (admin.conf) para o perfil do root
   copy:
-    dest: /etc/crio/crio.conf.d/02-cdi.conf
-    content: |
-      [crio.runtime]
-      enable_cdi_devices = true
-      cdi_spec_dirs = ["/etc/cdi", "/var/run/cdi"]
+    src: /etc/kubernetes/admin.conf
+    dest: /root/.kube/config
+    remote_src: yes
     owner: root
     group: root
-    mode: '0644'
-  notify: Reiniciar crio
+    mode: '0600'
+  when: not k8s_admin_conf.stat.exists or kubeadm_init.changed
 
-- name: Forçar reinicialização do runtime após injeção das configurações CDI
-  meta: flush_handlers
+- name: Aplicar o plugin de rede CNI (Flannel) para comunicação entre Pods
+  command: kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  when: not k8s_admin_conf.stat.exists or kubeadm_init.changed
+
+- name: Remover o taint de Control Plane para permitir agendamento no nó único
+  command: kubectl taint nodes --all node-role.kubernetes.io/control-plane-
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  failed_when: false # Ignora se o taint já tiver sido removido em runs anteriores
+  when: not k8s_admin_conf.stat.exists or kubeadm_init.changed
+
+- name: Remover o taint de Master (compatibilidade de versões legadas)
+  command: kubectl taint nodes --all node-role.kubernetes.io/master-
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  failed_when: false # Ignora se o taint já tiver sido removido
+  when: not k8s_admin_conf.stat.exists or kubeadm_init.changed
+
+# ==================== VALIDAÇÃO AUTOMÁTICA DA GPU NVIDIA VIA CDI ====================
+
+- name: Validar aceleração por GPU RTX 3060 via CDI localmente com Podman
+  command: podman run --rm --device nvidia.com/gpu=all docker.io/nvidia/cuda:12.0.0-base-ubuntu22.04 nvidia-smi
+  register: gpu_validation_result
+  changed_when: false
+  ignore_errors: yes
+
+- name: Exibir a tabela de diagnóstico nvidia-smi gerada pelo Podman no Actions
+  debug:
+    msg: "{{ gpu_validation_result.stdout_lines }}"
+  when: gpu_validation_result.rc == 0
+
+- name: Alertar caso o teste de injeção CDI de GPU tenha falhado
+  fail:
+    msg: "A validação da GPU via CDI/Podman falhou! Verifique os drivers proprietários NVIDIA ou o arquivo /etc/cdi/nvidia.yaml."
+  when: gpu_validation_result.rc != 0
