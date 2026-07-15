@@ -243,16 +243,9 @@ Este projeto é disponibilizado sob a licença comercial/pessoal **MIT**. Consul
 
 ## 🙏 Agradecimentos
 
-* 
-[Ansible](https://www.ansible.com/) pela poderosa ferramenta de automação.
-
-
-* 
-[Oracle Linux](https://www.oracle.com/linux/) pela plataforma estável e confiável.
-
-
-* 
-[Kubernetes](https://kubernetes.io/) pela ferramenta de gerenciamento de containers.
+* [Ansible](https://www.ansible.com/) pela poderosa ferramenta de automação.
+* [Oracle Linux](https://www.oracle.com/linux/) pela plataforma estável e confiável.
+* [Kubernetes](https://kubernetes.io/) pela ferramenta de gerenciamento de containers.
 
 
 
