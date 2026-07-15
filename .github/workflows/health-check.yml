@@ -1,6 +1,9 @@
 name: Cluster Health Check
 
 on:
+  workflow_dispatch:                              # Permite execução manual
+  push:                                           # (opcional) roda a cada push
+    branches: [ main ]
   workflow_run:
     workflows: ["Deploy Kubernetes Cluster"]
     types:
