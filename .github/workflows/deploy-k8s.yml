@@ -1,22 +1,30 @@
 name: Deploy Kubernetes Cluster
 
 on:
-  workflow_dispatch:
-    description: "Inicia o provisionamento do cluster Kubernetes v1.31 Single-Node com GPU CDI no Oracle Linux 10.1"
+  workflow_dispatch:   # execução manual
+  # push:
+  #   branches: [ main ]
+  #   paths:
+  #     - 'ansible/**'
 
 jobs:
   deploy:
-    name: Execute Ansible Playbook - Install
     runs-on: self-hosted
     steps:
-      - name: Checkout Repository Code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Validate Ansible Environment
+      - name: Setup SSH key (opcional, se usar SSH)
         run: |
-          ansible --version
-          ansible-lint --version || true
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 192.168.0.40 >> ~/.ssh/known_hosts
 
-      - name: Run Playbook Provisioning
+      - name: Run Ansible playbook with sudo
+        env:
+          ANSIBLE_BECOME_PASS: ${{ secrets.SUDO_PASSWORD }}
         run: |
-          ansible-playbook -i inventory/production playbooks/site.yml -v
+          ansible-playbook ansible/k8s-cluster-prep.yml \
+            -i ansible/inventory.ini \
+            --extra-vars "ansible_become_pass=$ANSIBLE_BECOME_PASS"
