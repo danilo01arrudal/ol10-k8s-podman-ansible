@@ -90,23 +90,11 @@ Contém a sequência de automação fim a fim. Como o ambiente é Single-Node, a
 | Tecnologia | Versão | Finalidade |
 | --- | --- | --- |
 | **Oracle Linux** | 10.1 | Sistema operacional corporativo estável para hosts e nós.
-
- |
 | **Kubernetes** | 1.31 | Plataforma de orquestração de containers de nível de produção.
-
- |
 | **CRI-O** | 1.31 | Container Runtime nativo leve otimizado para o ecossistema Kubernetes.
-
- |
 | **Podman** | Nativo | Motor nativo de gerenciamento local de imagens no host Oracle Linux 10.
-
- |
 | **NVIDIA CDI** | v1 | Container Device Interface para exposição direta da GPU RTX 3060 ao CRI-O.
-
- |
 | **Ansible** | 2.16+ | Orquestração declarativa da Infraestrutura como Código (IaC).
-
- |
 
 ---
 
