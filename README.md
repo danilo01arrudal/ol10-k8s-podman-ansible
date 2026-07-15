@@ -103,34 +103,19 @@ Contém a sequência de automação fim a fim. Como o ambiente é Single-Node, a
 O projeto possui automação integrada via dois fluxos declarativos no GitHub Actions (`.github/workflows/`):
 
 #### 1. `deploy-k8s.yml`
-
-* 
-**Trigger**: `workflow_dispatch` (Executado de forma manual sob demanda na aba "Actions").
-
-
-* 
-**Executor**: `self-hosted` (Executado no runner interno instalado em sua infraestrutura).
-
-
-* 
-**Escopo**: Garante integridade do checkout do código, validação de sintaxe e chamada de provisionamento do `playbooks/site.yml`.
-
-
+*  **Trigger**: `workflow_dispatch` (Executado de forma manual sob demanda na aba "Actions").
+  
+*  **Executor**: `self-hosted` (Executado no runner interno instalado em sua infraestrutura).
+  
+*  **Escopo**: Garante integridade do checkout do código, validação de sintaxe e chamada de provisionamento do `playbooks/site.yml`.
 
 #### 2. `uninstall-k8s.yml`
 
-* 
-**Trigger**: `workflow_dispatch` (Executado manualmente).
+*  **Trigger**: `workflow_dispatch` (Executado manualmente).
 
-
-* 
-**Executor**: `self-hosted`.
-
-
-* 
-**Escopo**: Invoca de maneira controlada a remoção completa da infraestrutura do cluster a partir do playbook `playbooks/uninstall.yml`.
-
-
+*  **Executor**: `self-hosted`.
+ 
+*  **Escopo**: Invoca de maneira controlada a remoção completa da infraestrutura do cluster a partir do playbook `playbooks/uninstall.yml`.
 
 ---
 
@@ -269,3 +254,8 @@ Este projeto é disponibilizado sob a licença comercial/pessoal **MIT**. Consul
 * 
 [Kubernetes](https://kubernetes.io/) pela ferramenta de gerenciamento de containers.
 
+
+
+```
+
+```
