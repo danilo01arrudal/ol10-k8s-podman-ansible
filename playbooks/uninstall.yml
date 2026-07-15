@@ -1,7 +1,7 @@
 ---
 - name: Desinstalação e Limpeza Completa do Cluster Kubernetes Single-Node
   hosts: k8s_node
-  become: yes
+  # become: yes -> Removido pois já conectamos como root
   tasks:
     - name: Resetar o estado do kubeadm (se existir)
       command: kubeadm reset -f
