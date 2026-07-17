@@ -5,11 +5,9 @@
   vars:
     kubernetes_version: "1.31"
     crio_version: "v1.34"
-    pod_network_cidr: "10.244.0.0/16"
-    service_cidr: "10.96.0.0/12"
   tasks:
-    - name: Update system and install base dependencies
-      dnf:
+    - name: Install base dependencies
+      ansible.builtin.dnf:
         name:
           - curl
           - wget
@@ -24,17 +22,17 @@
         update_cache: true
 
     - name: Disable swap permanently
-      command: swapoff -a
+      ansible.builtin.command: swapoff -a
       changed_when: false
 
     - name: Remove swap from fstab
-      lineinfile:
+      ansible.builtin.lineinfile:
         path: /etc/fstab
         regexp: '^.*swap.*$'
         state: absent
 
     - name: Load kernel modules
-      modprobe:
+      community.general.modprobe:
         name: "{{ item }}"
         state: present
       loop:
@@ -42,14 +40,15 @@
         - br_netfilter
 
     - name: Persist kernel modules
-      copy:
+      ansible.builtin.copy:
         content: |
           overlay
           br_netfilter
         dest: /etc/modules-load.d/k8s.conf
+        mode: '0644'
 
     - name: Apply sysctl parameters for Kubernetes networking
-      sysctl:
+      ansible.posix.sysctl:
         name: "{{ item.name }}"
         value: "{{ item.value }}"
         state: present
@@ -68,7 +67,7 @@
         - { name: kernel.panic_on_oops, value: 1 }
 
     - name: Create CRI-O repository
-      copy:
+      ansible.builtin.copy:
         content: |
           [cri-o]
           name=CRI-O Stable
@@ -77,9 +76,10 @@
           gpgcheck=1
           gpgkey=https://download.opensuse.org/repositories/isv:/cri-o:/stable:/{{ crio_version }}/rpm/repodata/repomd.xml.key
         dest: /etc/yum.repos.d/cri-o.repo
+        mode: '0644'
 
     - name: Install CRI-O
-      dnf:
+      ansible.builtin.dnf:
         name:
           - cri-o
           - cri-tools
@@ -87,7 +87,7 @@
         update_cache: true
 
     - name: Configure CRI-O - cgroup manager systemd
-      copy:
+      ansible.builtin.copy:
         content: |
           [crio]
           cgroup_manager = "systemd"
@@ -95,23 +95,25 @@
           conmon_cgroup = "pod"
           cgroup_v2 = true
         dest: /etc/crio/crio.conf.d/00-cgroup.conf
+        mode: '0644'
 
     - name: Configure CRI-O - eBPF sandbox fix for EL10/RHEL10
-      copy:
+      ansible.builtin.copy:
         content: |
           [crio.runtime]
           enable_devices = false
         dest: /etc/crio/crio.conf.d/01-ebpf-fix.conf
+        mode: '0644'
 
     - name: Start and enable CRI-O
-      systemd:
+      ansible.builtin.systemd:
         name: crio
         state: started
         enabled: true
         daemon_reload: true
 
     - name: Add Kubernetes repository
-      copy:
+      ansible.builtin.copy:
         content: |
           [kubernetes]
           name=Kubernetes
@@ -121,9 +123,10 @@
           gpgkey=https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/rpm/repodata/repomd.xml.key
           exclude=kubelet kubeadm kubectl cri-tools kubernetes-cni
         dest: /etc/yum.repos.d/kubernetes.repo
+        mode: '0644'
 
     - name: Install kubeadm, kubelet, kubectl
-      dnf:
+      ansible.builtin.dnf:
         name:
           - kubeadm
           - kubelet
@@ -132,29 +135,32 @@
         disable_excludes: kubernetes
 
     - name: Hold Kubernetes packages
-      command: dnf versionlock add kubeadm kubelet kubectl
-      ignore_errors: true
+      ansible.builtin.command: dnf versionlock add kubeadm kubelet kubectl
+      register: versionlock_result
+      failed_when: versionlock_result.rc != 0 and 'already added' not in versionlock_result.stderr
+      changed_when: "'already added' not in versionlock_result.stderr"
 
     - name: Configure kubelet cgroup driver
-      copy:
+      ansible.builtin.copy:
         content: |
           KUBELET_EXTRA_ARGS="--cgroup-driver=systemd --container-runtime-endpoint=unix:///var/run/crio/crio.sock"
         dest: /etc/sysconfig/kubelet
+        mode: '0644'
 
     - name: Start and enable kubelet
-      systemd:
+      ansible.builtin.systemd:
         name: kubelet
         state: started
         enabled: true
         daemon_reload: true
 
     - name: Ensure br_netfilter module is loaded for Cilium
-      modprobe:
+      community.general.modprobe:
         name: br_netfilter
         state: present
 
     - name: Set vm.max_map_count for Elasticsearch/Cilium
-      sysctl:
+      ansible.posix.sysctl:
         name: vm.max_map_count
         value: 262144
         state: present
@@ -165,7 +171,7 @@
   become: true
   tasks:
     - name: Install NVIDIA driver dependencies
-      dnf:
+      ansible.builtin.dnf:
         name:
           - kernel-devel
           - kernel-headers
@@ -177,7 +183,7 @@
         state: present
 
     - name: Add NVIDIA Container Toolkit repository
-      copy:
+      ansible.builtin.copy:
         content: |
           [nvidia-container-toolkit]
           name=NVIDIA Container Toolkit
@@ -186,9 +192,10 @@
           gpgcheck=1
           gpgkey=https://nvidia.github.io/libnvidia-container/gpgkey
         dest: /etc/yum.repos.d/nvidia-container-toolkit.repo
+        mode: '0644'
 
     - name: Install NVIDIA Container Toolkit
-      dnf:
+      ansible.builtin.dnf:
         name:
           - nvidia-container-toolkit
           - nvidia-driver-cuda
@@ -196,40 +203,42 @@
         update_cache: true
 
     - name: Verify NVIDIA driver installation
-      command: nvidia-smi
+      ansible.builtin.command: nvidia-smi
       register: nvidia_smi_output
       changed_when: false
       failed_when: false
 
     - name: Display NVIDIA-SMI output
-      debug:
+      ansible.builtin.debug:
         msg: "{{ nvidia_smi_output.stdout_lines }}"
 
-    - name: Configure CRI-O for NVIDIA runtime using nvidia-ctk
-      command: nvidia-ctk runtime configure --runtime=crio --config=/etc/crio/crio.conf
+    - name: Configure CRI-O for NVIDIA runtime
+      ansible.builtin.command: nvidia-ctk runtime configure --runtime=crio --config=/etc/crio/crio.conf
       changed_when: false
 
     - name: Generate CDI specification for NVIDIA GPUs
-      command: nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+      ansible.builtin.command: nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
       changed_when: false
 
     - name: Verify CDI generation
-      command: nvidia-ctk cdi list
+      ansible.builtin.command: nvidia-ctk cdi list
       register: cdi_list
       changed_when: false
 
     - name: Display CDI devices
-      debug:
+      ansible.builtin.debug:
         msg: "{{ cdi_list.stdout_lines }}"
 
     - name: Restart CRI-O to pick up NVIDIA runtime configuration
-      systemd:
+      ansible.builtin.systemd:
         name: crio
         state: restarted
         daemon_reload: true
 
     - name: Label node for GPU workloads
-      command: kubectl label node {{ ansible_hostname }} feature.node.kubernetes.io/gpu=nvidia --overwrite
+      ansible.builtin.command: kubectl label node {{ ansible_hostname }} feature.node.kubernetes.io/gpu=nvidia --overwrite
       delegate_to: KUBERMASTER
-      ignore_errors: true
+      register: label_result
+      failed_when: label_result.rc != 0 and 'already' not in label_result.stderr
+      changed_when: "'already' not in label_result.stderr"
       when: ansible_hostname != "KUBERMASTER"

@@ -20,6 +20,11 @@ jobs:
           pip3 install ansible-lint --user
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
+      - name: Install required Ansible collections
+        run: |
+    	  ansible-galaxy collection install community.general
+    	  ansible-galaxy collection install ansible.posix
+
       - name: Lint playbook
         run: ansible-lint ansible/k8s-cluster-prep.yml
 
