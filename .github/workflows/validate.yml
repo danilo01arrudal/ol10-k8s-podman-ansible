@@ -1,3 +1,4 @@
+---
 name: Ansible Validation on Oracle Linux 10
 
 on:
@@ -5,7 +6,7 @@ on:
 
 jobs:
   validate:
-    runs-on: self-hosted   # runner instalado no Oracle Linux 10
+    runs-on: self-hosted
 
     steps:
       - name: Checkout code
@@ -19,8 +20,8 @@ jobs:
 
       - name: Install required Ansible collections
         run: |
-    	  ansible-galaxy collection install community.general
-    	  ansible-galaxy collection install ansible.posix
+          ansible-galaxy collection install community.general
+          ansible-galaxy collection install ansible.posix
 
       - name: Lint playbook
         run: ansible-lint ansible/k8s-cluster-prep.yml
