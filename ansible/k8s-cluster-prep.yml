@@ -1,1 +1,235 @@
+---
+- name: Prepare Kubernetes Cluster Nodes - Oracle Linux 10.1
+  hosts: all
+  become: true
+  vars:
+    kubernetes_version: "1.31"
+    crio_version: "v1.34"
+    pod_network_cidr: "10.244.0.0/16"
+    service_cidr: "10.96.0.0/12"
+  tasks:
+    - name: Update system and install base dependencies
+      dnf:
+        name:
+          - curl
+          - wget
+          - vim
+          - git
+          - conntrack
+          - socat
+          - iproute-tc
+          - device-mapper-persistent-data
+          - lvm2
+        state: present
+        update_cache: true
 
+    - name: Disable swap permanently
+      command: swapoff -a
+      changed_when: false
+
+    - name: Remove swap from fstab
+      lineinfile:
+        path: /etc/fstab
+        regexp: '^.*swap.*$'
+        state: absent
+
+    - name: Load kernel modules
+      modprobe:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - overlay
+        - br_netfilter
+
+    - name: Persist kernel modules
+      copy:
+        content: |
+          overlay
+          br_netfilter
+        dest: /etc/modules-load.d/k8s.conf
+
+    - name: Apply sysctl parameters for Kubernetes networking
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: true
+      loop:
+        - { name: net.bridge.bridge-nf-call-iptables, value: 1 }
+        - { name: net.bridge.bridge-nf-call-ip6tables, value: 1 }
+        - { name: net.ipv4.ip_forward, value: 1 }
+        - { name: net.ipv4.conf.all.rp_filter, value: 0 }
+        - { name: net.ipv4.conf.default.rp_filter, value: 0 }
+        - { name: net.core.rmem_max, value: 16777216 }
+        - { name: net.core.wmem_max, value: 16777216 }
+        - { name: vm.overcommit_memory, value: 1 }
+        - { name: vm.panic_on_oom, value: 0 }
+        - { name: kernel.panic, value: 10 }
+        - { name: kernel.panic_on_oops, value: 1 }
+
+    - name: Create CRI-O repository
+      copy:
+        content: |
+          [cri-o]
+          name=CRI-O Stable
+          baseurl=https://download.opensuse.org/repositories/isv:/cri-o:/stable:/{{ crio_version }}/rpm/
+          enabled=1
+          gpgcheck=1
+          gpgkey=https://download.opensuse.org/repositories/isv:/cri-o:/stable:/{{ crio_version }}/rpm/repodata/repomd.xml.key
+        dest: /etc/yum.repos.d/cri-o.repo
+
+    - name: Install CRI-O
+      dnf:
+        name:
+          - cri-o
+          - cri-tools
+        state: present
+        update_cache: true
+
+    - name: Configure CRI-O - cgroup manager systemd
+      copy:
+        content: |
+          [crio]
+          cgroup_manager = "systemd"
+          [crio.runtime]
+          conmon_cgroup = "pod"
+          cgroup_v2 = true
+        dest: /etc/crio/crio.conf.d/00-cgroup.conf
+
+    - name: Configure CRI-O - eBPF sandbox fix for EL10/RHEL10
+      copy:
+        content: |
+          [crio.runtime]
+          enable_devices = false
+        dest: /etc/crio/crio.conf.d/01-ebpf-fix.conf
+
+    - name: Start and enable CRI-O
+      systemd:
+        name: crio
+        state: started
+        enabled: true
+        daemon_reload: true
+
+    - name: Add Kubernetes repository
+      copy:
+        content: |
+          [kubernetes]
+          name=Kubernetes
+          baseurl=https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/rpm/
+          enabled=1
+          gpgcheck=1
+          gpgkey=https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/rpm/repodata/repomd.xml.key
+          exclude=kubelet kubeadm kubectl cri-tools kubernetes-cni
+        dest: /etc/yum.repos.d/kubernetes.repo
+
+    - name: Install kubeadm, kubelet, kubectl
+      dnf:
+        name:
+          - kubeadm
+          - kubelet
+          - kubectl
+        state: present
+        disable_excludes: kubernetes
+
+    - name: Hold Kubernetes packages
+      command: dnf versionlock add kubeadm kubelet kubectl
+      ignore_errors: true
+
+    - name: Configure kubelet cgroup driver
+      copy:
+        content: |
+          KUBELET_EXTRA_ARGS="--cgroup-driver=systemd --container-runtime-endpoint=unix:///var/run/crio/crio.sock"
+        dest: /etc/sysconfig/kubelet
+
+    - name: Start and enable kubelet
+      systemd:
+        name: kubelet
+        state: started
+        enabled: true
+        daemon_reload: true
+
+    - name: Ensure br_netfilter module is loaded for Cilium
+      modprobe:
+        name: br_netfilter
+        state: present
+
+    - name: Set vm.max_map_count for Elasticsearch/Cilium
+      sysctl:
+        name: vm.max_map_count
+        value: 262144
+        state: present
+        reload: true
+
+- name: Configure GPU Node - NVIDIA RTX 3060 with CDI
+  hosts: gpu_nodes
+  become: true
+  tasks:
+    - name: Install NVIDIA driver dependencies
+      dnf:
+        name:
+          - kernel-devel
+          - kernel-headers
+          - gcc
+          - make
+          - dkms
+          - elfutils-libelf-devel
+          - libglvnd-devel
+        state: present
+
+    - name: Add NVIDIA Container Toolkit repository
+      copy:
+        content: |
+          [nvidia-container-toolkit]
+          name=NVIDIA Container Toolkit
+          baseurl=https://nvidia.github.io/libnvidia-container/stable/rpm/el10/$basearch
+          enabled=1
+          gpgcheck=1
+          gpgkey=https://nvidia.github.io/libnvidia-container/gpgkey
+        dest: /etc/yum.repos.d/nvidia-container-toolkit.repo
+
+    - name: Install NVIDIA Container Toolkit
+      dnf:
+        name:
+          - nvidia-container-toolkit
+          - nvidia-driver-cuda
+        state: present
+        update_cache: true
+
+    - name: Verify NVIDIA driver installation
+      command: nvidia-smi
+      register: nvidia_smi_output
+      changed_when: false
+      failed_when: false
+
+    - name: Display NVIDIA-SMI output
+      debug:
+        msg: "{{ nvidia_smi_output.stdout_lines }}"
+
+    - name: Configure CRI-O for NVIDIA runtime using nvidia-ctk
+      command: nvidia-ctk runtime configure --runtime=crio --config=/etc/crio/crio.conf
+      changed_when: false
+
+    - name: Generate CDI specification for NVIDIA GPUs
+      command: nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+      changed_when: false
+
+    - name: Verify CDI generation
+      command: nvidia-ctk cdi list
+      register: cdi_list
+      changed_when: false
+
+    - name: Display CDI devices
+      debug:
+        msg: "{{ cdi_list.stdout_lines }}"
+
+    - name: Restart CRI-O to pick up NVIDIA runtime configuration
+      systemd:
+        name: crio
+        state: restarted
+        daemon_reload: true
+
+    - name: Label node for GPU workloads
+      command: kubectl label node {{ ansible_hostname }} feature.node.kubernetes.io/gpu=nvidia --overwrite
+      delegate_to: KUBERMASTER
+      ignore_errors: true
+      when: ansible_hostname != "KUBERMASTER"
