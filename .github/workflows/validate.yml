@@ -1,10 +1,7 @@
 name: Ansible Validation on Oracle Linux 10
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   validate:
