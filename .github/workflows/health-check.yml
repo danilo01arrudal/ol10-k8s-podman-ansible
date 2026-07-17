@@ -1,7 +1,7 @@
 name: Cluster Health Check
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Permite o disparo manual pelo botão no GitHub
   push:
     branches: [ main ]
   workflow_run:
@@ -16,18 +16,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H 192.168.0.40 >> ~/.ssh/known_hosts
-
       - name: Check nodes via SSH
         run: |
-          ssh -o StrictHostKeyChecking=no root@192.168.0.40 "kubectl get nodes -o wide"
-          ssh -o StrictHostKeyChecking=no root@192.168.0.40 "kubectl get pods -n kube-system"
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no root@192.168.0.40 "kubectl get nodes -o wide"
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no root@192.168.0.40 "kubectl get pods -n kube-system"
 
       - name: Check GPU availability via SSH
         run: |
-          ssh -o StrictHostKeyChecking=no root@192.168.0.40 "kubectl get nodes -o json | jq '.items[] | {name:.metadata.name, gpu:.status.allocatable.\"nvidia.com/gpu\"}'"
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no root@192.168.0.40 "kubectl get nodes -o json | jq '.items[] | {name:.metadata.name, gpu:.status.allocatable.\"nvidia.com/gpu\"}'"
