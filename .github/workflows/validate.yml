@@ -14,10 +14,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Ansible and ansible-lint (if not present)
+      - name: Install Ansible and ansible-lint
         run: |
-          sudo dnf install -y ansible ansible-lint || true
-          pip3 install ansible-lint --user || true
+          sudo dnf install -y ansible || true
+          pip3 install ansible-lint --user
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Lint playbook
         run: ansible-lint ansible/k8s-cluster-prep.yml
