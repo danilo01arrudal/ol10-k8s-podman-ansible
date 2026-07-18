@@ -27,7 +27,7 @@ jobs:
       - name: Wait for pod to be ready
         run: |
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no root@192.168.0.40 \
-            "kubectl wait --for=condition=ready pod/gpu-validation-pod --timeout=120s"
+            "kubectl wait --for=condition=Completed pod/gpu-validation-pod --timeout=120s"
 
       - name: Show pod logs
         run: |
