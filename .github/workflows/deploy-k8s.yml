@@ -8,7 +8,7 @@ jobs:
     runs-on: self-hosted # Roda no seu runner local na VM 192.168.122.22
     steps:
       - name: Checkout do Código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Rodar Playbook de Provisionamento e Inicialização do Cluster
         run: |
