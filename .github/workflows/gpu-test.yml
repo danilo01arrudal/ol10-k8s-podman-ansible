@@ -5,6 +5,7 @@ on:
 jobs:
   test-gpu:
     runs-on: self-hosted
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -24,10 +25,28 @@ jobs:
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no root@192.168.0.40 \
             "kubectl apply -f /tmp/gpu-test-pod.yaml"
 
-      - name: Wait for pod to be ready
+      - name: Wait for pod to complete (manual loop)
         run: |
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no root@192.168.0.40 \
-            "kubectl wait --for=condition=Completed pod/gpu-validation-pod --timeout=120s"
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no root@192.168.0.40 << 'EOF'
+            TIMEOUT=120
+            INTERVAL=5
+            ELAPSED=0
+            while [ $ELAPSED -lt $TIMEOUT ]; do
+              PHASE=$(kubectl get pod gpu-validation-pod -o jsonpath='{.status.phase}')
+              echo "Current phase: $PHASE"
+              if [ "$PHASE" = "Succeeded" ] || [ "$PHASE" = "Completed" ]; then
+                echo "Pod completed successfully."
+                exit 0
+              elif [ "$PHASE" = "Failed" ] || [ "$PHASE" = "Unknown" ]; then
+                echo "Pod failed with phase: $PHASE"
+                exit 1
+              fi
+              sleep $INTERVAL
+              ELAPSED=$((ELAPSED + INTERVAL))
+            done
+            echo "Timed out waiting for pod to complete."
+            exit 1
+          EOF
 
       - name: Show pod logs
         run: |
