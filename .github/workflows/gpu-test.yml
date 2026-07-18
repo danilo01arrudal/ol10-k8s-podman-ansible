@@ -9,16 +9,33 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
+      - name: Ensure GPU node label exists
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no root@192.168.0.40 \
+            "kubectl label node exated feature.node.kubernetes.io/gpu=nvidia --overwrite"
+
       - name: Copy GPU test manifest to master
         run: |
           scp -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no \
             manifests/gpu-test-pod.yaml root@192.168.0.40:/tmp/
 
-      - name: Apply GPU test pod via SSH
+      - name: Apply GPU test pod
         run: |
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no root@192.168.0.40 \
             "kubectl apply -f /tmp/gpu-test-pod.yaml"
+
+      - name: Wait for pod to be ready
+        run: |
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no root@192.168.0.40 \
-            "kubectl wait --for=condition=ready pod/gpu-validation-pod --timeout=60s"
+            "kubectl wait --for=condition=ready pod/gpu-validation-pod --timeout=120s"
+
+      - name: Show pod logs
+        run: |
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no root@192.168.0.40 \
             "kubectl logs gpu-validation-pod"
+
+      - name: Debug on failure
+        if: failure()
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no root@192.168.0.40 \
+            "kubectl describe pod gpu-validation-pod"
