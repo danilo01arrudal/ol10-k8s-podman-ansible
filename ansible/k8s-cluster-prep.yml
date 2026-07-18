@@ -236,9 +236,9 @@
         daemon_reload: true
 
     - name: Label node for GPU workloads
-      ansible.builtin.command: kubectl label node {{ ansible_hostname }} feature.node.kubernetes.io/gpu=nvidia --overwrite
-      delegate_to: KUBERMASTER
+      ansible.builtin.command: >
+        kubectl label node {{ ansible_facts['hostname'] }}
+        feature.node.kubernetes.io/gpu=nvidia --overwrite
       register: label_result
       failed_when: label_result.rc != 0 and 'already' not in label_result.stderr
       changed_when: "'already' not in label_result.stderr"
-      when: ansible_hostname != "KUBERMASTER"
